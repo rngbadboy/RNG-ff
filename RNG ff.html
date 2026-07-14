@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RNG FF | Channel Command Center</title>
+
+<!-- Fonts: Rajdhani (HUD/display) + Inter (body) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!-- Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<!-- ==================== Firebase SDK (compat, no build step needed) ==================== -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<style>
+/* =========================================================================
+   RNG FF COMMAND CENTER — STYLESHEET
+   Organized as: 1) Design tokens  2) Reset/base  3) Layout shell
+   4) Sidebar  5) Topbar  6) HUD panel component (signature element)
+   7) Buttons/forms  8) Dashboard  9) Tables/cards  10) Modal
+   11) Calendar  12) Toast/loader/empty-state  13) Responsive
+   ========================================================================= */
+
+/* ---------- 1) Design tokens ---------- */
+:root{
+  --bg-void:#0B0E14;
+  --bg-panel:#12161F;
+  --bg-panel-2:#1A2030;
+  --bg-panel-3:#20263A;
+  --line:rgba(255,255,255,0.08);
+  --line-soft:rgba(255,255,255,0.05);
+
+  --flame:#FF5722;      /* Free Fire signature orange-red */
+  --flame-dim:#FF572233;
+  --gold:#FFC542;       /* rank gold */
+  --cyan:#3FE0D0;       /* HUD accent / success alt */
+  --danger:#FF4757;
+  --success:#2ECC71;
+  --info:#3B9EFF;
+
+  --text-hi:#EDEFF5;
+  --text-mid:#98A2B8;
+  --text-dim:#5B6478;
+
+  --font-display:'Rajdhani',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+
+  --radius:10px;
+  --shadow-glow:0 0 0 1px var(--line), 0 12px 30px -12px rgba(0,0,0,.6);
+}
+
+/* ---------- 2) Reset / base ---------- */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  background:
+    radial-gradient(circle at 15% 0%, #1a1f2e 0%, transparent 45%),
+    radial-gradient(circle at 100% 100%, #1a141c 0%, transparent 40%),
+    var(--bg-void);
+  color:var(--text-hi);
+  font-family:var(--font-body);
+  font-size:14px;
+  line-height:1.5;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+h1,h2,h3,h4{font-family:var(--font-display);font-weight:700;letter-spacing:.02em;}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+input,textarea,select{font-family:inherit;color:var(--text-hi);}
+a{color:var(--cyan);text-decoration:none;}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--bg-panel-3);border-radius:8px;}
+::-webkit-scrollbar-thumb:hover{background:var(--flame);}
+.hidden{display:none !important;}
+.label-mono{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-dim);}
+
+/* ---------- 3) Layout shell ---------- */
+.app-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh;}
+
+/* ---------- 4) Sidebar ---------- */
+.sidebar{
+  background:linear-gradient(180deg,#0D1017,#0A0D13);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;z-index:40;
+}
+.sidebar-brand{
+  padding:22px 20px 18px;
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;
+}
+.sidebar-brand .mark{
+  width:38px;height:38px;border-radius:8px;
+  background:linear-gradient(135deg,var(--flame),#C62828);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-weight:700;font-size:18px;color:#fff;
+  clip-path:polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%);
+  box-shadow:0 0 18px var(--flame-dim);
+}
+.sidebar-brand .txt h1{font-size:18px;color:var(--text-hi);line-height:1.1;}
+.sidebar-brand .txt span{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:.14em;}
+
+.nav-group{padding:14px 12px;flex:1;overflow-y:auto;}
+.nav-item{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 14px;margin-bottom:4px;border-radius:8px;
+  color:var(--text-mid);font-weight:600;font-size:13.5px;
+  border-left:3px solid transparent;
+  transition:.15s ease;
+}
+.nav-item i{width:18px;text-align:center;font-size:15px;}
+.nav-item:hover{background:var(--bg-panel-2);color:var(--text-hi);}
+.nav-item.active{
+  background:linear-gradient(90deg,var(--flame-dim),transparent);
+  border-left:3px solid var(--flame);
+  color:#fff;
+}
+.sidebar-foot{padding:14px 20px;border-top:1px solid var(--line);}
+.sidebar-foot .rout{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);}
+.sidebar-foot .rout b{color:var(--gold);}
+
+/* ---------- 5) Topbar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:30;
+  background:rgba(11,14,20,.75);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  padding:14px 26px;display:flex;align-items:center;justify-content:space-between;gap:20px;
+}
+.page-title{font-size:22px;color:var(--text-hi);}
+.page-title small{display:block;font-family:var(--font-mono);font-size:11px;color:var(--text-dim);font-weight:400;letter-spacing:.08em;}
+.search-wrap{position:relative;flex:1;max-width:420px;}
+.search-wrap input{
+  width:100%;background:var(--bg-panel);border:1px solid var(--line);
+  border-radius:8px;padding:10px 14px 10px 38px;color:var(--text-hi);font-size:13px;
+  transition:.15s;
+}
+.search-wrap input:focus{outline:none;border-color:var(--flame);box-shadow:0 0 0 3px var(--flame-dim);}
+.search-wrap i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-dim);}
+.search-results{
+  position:absolute;top:calc(100% + 8px);left:0;right:0;
+  background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;
+  max-height:400px;overflow-y:auto;box-shadow:var(--shadow-glow);z-index:100;
+}
+.search-results .sr-item{padding:11px 14px;border-bottom:1px solid var(--line-soft);cursor:pointer;}
+.search-results .sr-item:hover{background:var(--bg-panel-3);}
+.search-results .sr-item .sr-title{font-weight:600;font-size:13px;}
+.search-results .sr-item .sr-meta{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);margin-top:2px;}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.clock{font-family:var(--font-mono);font-size:12px;color:var(--text-mid);text-align:right;}
+
+/* ---------- 6) HUD panel (signature element) ---------- */
+/* Clipped-corner panel with diagonal accent stripe — used for stat cards, list cards, modal */
+.hud-panel{
+  position:relative;
+  background:linear-gradient(180deg,var(--bg-panel),var(--bg-panel-2));
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,0 100%);
+  padding:18px 20px;
+  transition:.18s ease;
+}
+.hud-panel::before{
+  content:'';position:absolute;top:0;right:0;width:18px;height:18px;
+  background:var(--accent,var(--flame));clip-path:polygon(100% 0,0 0,100% 100%);
+}
+.hud-panel:hover{border-color:var(--accent,var(--flame));box-shadow:0 0 0 1px var(--accent,var(--flame)),0 14px 34px -14px rgba(0,0,0,.7);transform:translateY(-2px);}
+
+/* ---------- 7) Buttons / forms ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:9px 16px;border-radius:8px;font-weight:600;font-size:13px;
+  border:1px solid var(--line);color:var(--text-hi);background:var(--bg-panel-2);
+  transition:.15s;white-space:nowrap;
+}
+.btn:hover{border-color:var(--text-mid);}
+.btn-primary{background:linear-gradient(135deg,var(--flame),#C62828);border-color:transparent;color:#fff;box-shadow:0 6px 18px -8px var(--flame-dim);}
+.btn-primary:hover{filter:brightness(1.1);}
+.btn-ghost{background:transparent;}
+.btn-danger{background:rgba(255,71,87,.12);border-color:rgba(255,71,87,.35);color:#FF7B85;}
+.btn-danger:hover{background:rgba(255,71,87,.22);}
+.btn-sm{padding:6px 11px;font-size:12px;border-radius:6px;}
+.btn-icon{width:34px;height:34px;padding:0;justify-content:center;border-radius:8px;}
+
+.field{margin-bottom:14px;}
+.field label{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;}
+.field input,.field textarea,.field select{
+  width:100%;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;font-size:13.5px;color:var(--text-hi);transition:.15s;
+}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--flame);box-shadow:0 0 0 3px var(--flame-dim);}
+.field textarea{resize:vertical;min-height:90px;font-family:var(--font-body);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.save-indicator{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+.save-indicator.saving{color:var(--gold);}
+.save-indicator.saved{color:var(--success);}
+.save-indicator i{font-size:10px;}
+
+/* ---------- 8) Dashboard ---------- */
+.page{padding:24px 26px 60px;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:26px;}
+.stat-card .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.stat-card .stat-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--accent-dim,rgba(255,87,34,.14));color:var(--accent,var(--flame));font-size:15px;}
+.stat-card .stat-num{font-family:var(--font-display);font-size:30px;font-weight:700;color:var(--text-hi);line-height:1;}
+.stat-card .stat-name{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-top:6px;}
+
+.dash-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.section-head h3{font-size:16px;color:var(--text-hi);display:flex;align-items:center;gap:8px;}
+.section-head h3 i{color:var(--flame);}
+.mini-list{display:flex;flex-direction:column;gap:8px;}
+.mini-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-panel);border:1px solid var(--line-soft);border-radius:8px;}
+.mini-row .mr-title{font-weight:600;font-size:13px;}
+.mini-row .mr-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);margin-top:2px;}
+.routine-bar{background:var(--bg-panel);border-radius:8px;height:10px;overflow:hidden;margin-top:8px;border:1px solid var(--line-soft);}
+.routine-bar > div{height:100%;background:linear-gradient(90deg,var(--flame),var(--gold));}
+
+/* ---------- 9) Tables / cards / filters ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px;}
+.toolbar .search-wrap{max-width:260px;}
+.toolbar select{background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:12.5px;color:var(--text-hi);}
+.toolbar .spacer{flex:1;}
+
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.item-card{cursor:pointer;}
+.item-card .ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.item-card .ic-title{font-size:15.5px;font-weight:700;color:var(--text-hi);font-family:var(--font-display);}
+.item-card .ic-fav{color:var(--text-dim);font-size:15px;}
+.item-card .ic-fav.active{color:var(--gold);}
+.item-card .ic-desc{color:var(--text-mid);font-size:12.5px;line-height:1.5;margin-bottom:12px;min-height:34px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.item-card .ic-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.tag{font-family:var(--font-mono);font-size:10px;padding:3px 8px;border-radius:5px;background:var(--bg-panel-3);color:var(--text-mid);border:1px solid var(--line-soft);}
+.tag.status-Draft{color:var(--text-mid);}
+.tag.status-Recording{color:var(--info);border-color:var(--info);}
+.tag.status-Editing{color:var(--gold);border-color:var(--gold);}
+.tag.status-Ready{color:var(--cyan);border-color:var(--cyan);}
+.tag.status-Scheduled{color:#B99BFF;border-color:#B99BFF;}
+.tag.status-Uploaded{color:var(--success);border-color:var(--success);}
+.tag.status-Missed{color:var(--danger);border-color:var(--danger);}
+.item-card .ic-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line-soft);padding-top:10px;}
+.ic-actions{display:flex;gap:6px;}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--text-dim);text-align:center;}
+.empty-state i{font-size:38px;margin-bottom:14px;color:var(--bg-panel-3);}
+.empty-state h4{color:var(--text-mid);margin-bottom:6px;font-size:15px;}
+.empty-state p{font-size:12.5px;max-width:320px;}
+
+/* ---------- 10) Modal ---------- */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(5,7,11,.72);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;
+  opacity:0;pointer-events:none;transition:.18s;
+}
+.modal-overlay.open{opacity:1;pointer-events:auto;}
+.modal-box{
+  background:var(--bg-panel);border:1px solid var(--line);border-radius:14px;
+  width:100%;max-width:640px;max-height:88vh;overflow-y:auto;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.8);
+  transform:translateY(14px);transition:.2s;
+}
+.modal-overlay.open .modal-box{transform:translateY(0);}
+.modal-box.wide{max-width:880px;}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg-panel);z-index:2;}
+.modal-head h3{font-size:17px;}
+.modal-body{padding:20px 22px;}
+.modal-foot{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--bg-panel);}
+
+/* confirm dialog reuses modal styles, smaller */
+.confirm-box{max-width:400px;}
+.confirm-body{padding:22px;text-align:center;}
+.confirm-body i{font-size:32px;color:var(--danger);margin-bottom:12px;}
+.confirm-body p{color:var(--text-mid);font-size:13.5px;}
+.confirm-foot{display:flex;gap:10px;justify-content:center;padding:0 22px 22px;}
+
+/* ---------- 11) Calendar ---------- */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.cal-nav{display:flex;align-items:center;gap:12px;}
+.cal-nav h3{font-size:18px;min-width:180px;text-align:center;}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--text-mid);margin-bottom:14px;}
+.cal-legend span{display:inline-flex;align-items:center;gap:6px;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.cal-dow{text-align:center;font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);padding:6px 0;letter-spacing:.1em;}
+.cal-cell{
+  background:var(--bg-panel);border:1px solid var(--line-soft);border-radius:8px;
+  min-height:88px;padding:8px;cursor:pointer;transition:.15s;position:relative;
+}
+.cal-cell:hover{border-color:var(--flame);}
+.cal-cell.other-month{opacity:.35;}
+.cal-cell.today{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.cal-cell .cd-num{font-family:var(--font-mono);font-size:11.5px;color:var(--text-mid);}
+.cal-cell .cd-dots{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+
+/* ---------- 12) Toast / loader / empty ---------- */
+#toastHost{position:fixed;bottom:22px;right:22px;z-index:500;display:flex;flex-direction:column;gap:10px;}
+.toast{
+  background:var(--bg-panel-2);border:1px solid var(--line);border-left:3px solid var(--flame);
+  border-radius:8px;padding:12px 16px;font-size:13px;min-width:240px;
+  box-shadow:var(--shadow-glow);animation:toastIn .25s ease;
+}
+.toast.success{border-left-color:var(--success);}
+.toast.error{border-left-color:var(--danger);}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+#loaderOverlay{
+  position:fixed;inset:0;background:var(--bg-void);z-index:1000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+.spinner{width:44px;height:44px;border-radius:50%;border:3px solid var(--bg-panel-3);border-top-color:var(--flame);animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#loaderOverlay p{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.14em;color:var(--text-dim);text-transform:uppercase;}
+
+/* editor overlay for script manager */
+.editor-overlay{
+  position:fixed;inset:0;background:var(--bg-void);z-index:150;overflow-y:auto;
+  transform:translateX(100%);transition:.22s ease;
+}
+.editor-overlay.open{transform:translateX(0);}
+.editor-head{
+  position:sticky;top:0;background:rgba(11,14,20,.9);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);padding:16px 26px;display:flex;align-items:center;justify-content:space-between;z-index:5;
+}
+.editor-body{padding:24px 26px 80px;max-width:980px;margin:0 auto;}
+
+/* trash toggle */
+.pill-toggle{display:flex;background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.pill-toggle button{padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--text-mid);}
+.pill-toggle button.active{background:var(--flame);color:#fff;}
+
+.badge-count{background:var(--bg-panel-3);color:var(--text-mid);font-family:var(--font-mono);font-size:10px;padding:2px 7px;border-radius:20px;}
+
+/* ---------- 13) Responsive ---------- */
+@media (max-width:980px){
+  .dash-grid{grid-template-columns:1fr;}
+  .field-row,.field-row-3{grid-template-columns:1fr;}
+}
+@media (max-width:760px){
+  .app-shell{grid-template-columns:1fr;}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:230px;transform:translateX(-100%);transition:.2s;z-index:300;}
+  .sidebar.open{transform:translateX(0);}
+  .menu-btn{display:flex !important;}
+  .topbar{padding:12px 16px;}
+  .page{padding:16px;}
+  .search-wrap{display:none;}
+}
+.menu-btn{display:none;width:38px;height:38px;align-items:center;justify-content:center;border-radius:8px;background:var(--bg-panel-2);border:1px solid var(--line);}
+</style>
+</head>
+<body>
+
+<!-- ==================== Loader ==================== -->
+<div id="loaderOverlay">
+  <div class="spinner"></div>
+  <p>Booting Command Center…</p>
+</div>
+
+<div class="app-shell">
+
+  <!-- ==================== Sidebar ==================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">RF</div>
+      <div class="txt">
+        <h1>RNG FF</h1>
+        <span>CHANNEL COMMAND</span>
+      </div>
+    </div>
+    <nav class="nav-group" id="navGroup">
+      <div class="nav-item active" data-page="dashboard"><i class="fa-solid fa-gauge-high"></i> Dashboard</div>
+      <div class="nav-item" data-page="scripts"><i class="fa-solid fa-file-pen"></i> Script Manager</div>
+      <div class="nav-item" data-page="ideas"><i class="fa-solid fa-lightbulb"></i> Video Ideas</div>
+      <div class="nav-item" data-page="notes"><i class="fa-solid fa-note-sticky"></i> Notes</div>
+      <div class="nav-item" data-page="planner"><i class="fa-solid fa-calendar-check"></i> Upload Planner</div>
+      <div class="nav-item" data-page="videos"><i class="fa-solid fa-clock-rotate-left"></i> Video History</div>
+      <div class="nav-item" data-page="competitors"><i class="fa-solid fa-crosshairs"></i> Competitor Tracker</div>
+      <div class="nav-item" data-page="calendar"><i class="fa-solid fa-calendar-days"></i> Content Calendar</div>
+      <div class="nav-item" data-page="settings"><i class="fa-solid fa-gear"></i> Settings</div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="rout">WEEKLY TARGET<br><b id="sfLong">3</b> Long &nbsp;/&nbsp; <b id="sfShort">4</b> Shorts</div>
+    </div>
+  </aside>
+
+  <!-- ==================== Main ==================== -->
+  <div>
+    <!-- Topbar -->
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn"><i class="fa-solid fa-bars"></i></button>
+      <div class="page-title" id="pageTitle">Dashboard<small id="pageSub">Overview of RNG FF channel operations</small></div>
+      <div class="search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="globalSearch" placeholder="Search everything… scripts, ideas, notes, videos">
+        <div class="search-results hidden" id="searchResults"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="clock" id="clockBox">--:--</div>
+      </div>
+    </header>
+
+    <!-- ==================== PAGE: Dashboard ==================== -->
+    <section class="page" id="page-dashboard">
+      <div class="stat-grid" id="statGrid"></div>
+
+      <div class="dash-grid">
+        <div class="hud-panel">
+          <div class="section-head"><h3><i class="fa-solid fa-fire"></i> Weekly Upload Routine</h3></div>
+          <div class="label-mono">Long Videos — <span id="rLongDone">0</span>/<span id="rLongTarget">3</span></div>
+          <div class="routine-bar"><div id="rLongBar" style="width:0%"></div></div>
+          <div style="height:14px"></div>
+          <div class="label-mono">Shorts — <span id="rShortDone">0</span>/<span id="rShortTarget">4</span></div>
+          <div class="routine-bar"><div id="rShortBar" style="width:0%"></div></div>
+
+          <div style="height:22px"></div>
+          <div class="section-head"><h3><i class="fa-solid fa-list-check"></i> Upcoming Uploads</h3></div>
+          <div class="mini-list" id="upcomingList"></div>
+        </div>
+
+        <div class="hud-panel">
+          <div class="section-head"><h3><i class="fa-solid fa-file-pen"></i> Recent Scripts</h3></div>
+          <div class="mini-list" id="recentScripts"></div>
+          <div style="height:22px"></div>
+          <div class="section-head"><h3><i class="fa-solid fa-lightbulb"></i> Fresh Ideas</h3></div>
+          <div class="mini-list" id="recentIdeas"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PAGE: Script Manager ==================== -->
+    <section class="page hidden" id="page-scripts">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="scriptSearch" placeholder="Search scripts…"></div>
+        <select id="scriptStatusFilter"><option value="">All Status</option><option>Draft</option><option>Recording</option><option>Editing</option><option>Ready</option><option>Scheduled</option><option>Uploaded</option></select>
+        <select id="scriptTypeFilter"><option value="">All Types</option><option>Long</option><option>Short</option></select>
+        <select id="scriptSort"><option value="updated_desc">Recently Updated</option><option value="created_desc">Newest Created</option><option value="title_asc">Title A–Z</option><option value="publish_asc">Publish Date</option></select>
+        <div class="spacer"></div>
+        <div class="pill-toggle"><button class="active" id="scriptTabActive">Active</button><button id="scriptTabTrash">Trash</button></div>
+        <button class="btn btn-primary" id="btnNewScript"><i class="fa-solid fa-plus"></i> New Script</button>
+      </div>
+      <div class="card-grid" id="scriptGrid"></div>
+    </section>
+
+    <!-- Script Editor (slide-over full page) -->
+    <div class="editor-overlay" id="scriptEditor">
+      <div class="editor-head">
+        <div>
+          <h3 style="font-size:18px" id="editorHeading">New Script</h3>
+          <div class="save-indicator" id="saveIndicator"><i class="fa-solid fa-circle"></i> <span>Idle</span></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn" id="btnFavToggle"><i class="fa-regular fa-star"></i> Favorite</button>
+          <button class="btn" id="btnCloseEditor"><i class="fa-solid fa-xmark"></i> Close</button>
+        </div>
+      </div>
+      <div class="editor-body">
+        <div class="field-row-3">
+          <div class="field"><label>Video Title</label><input id="f_title" placeholder="e.g. TOP 5 GRANDMASTER TIPS"></div>
+          <div class="field"><label>Video Type</label><select id="f_type"><option>Long</option><option>Short</option></select></div>
+          <div class="field"><label>Status</label><select id="f_status"><option>Draft</option><option>Recording</option><option>Editing</option><option>Ready</option><option>Scheduled</option><option>Uploaded</option></select></div>
+        </div>
+        <div class="field-row-3">
+          <div class="field"><label>Video Category</label><input id="f_category" placeholder="e.g. Tips & Tricks"></div>
+          <div class="field"><label>Series Name</label><input id="f_series" placeholder="e.g. Ranked Grind EP"></div>
+          <div class="field"><label>Publish Date</label><input type="date" id="f_publishDate"></div>
+        </div>
+        <div class="field"><label>Script</label><textarea id="f_script" style="min-height:220px" placeholder="Write full script here…"></textarea></div>
+        <div class="field-row">
+          <div class="field"><label>Thumbnail Idea</label><textarea id="f_thumbIdea" placeholder="Describe the thumbnail concept…"></textarea></div>
+          <div class="field"><label>Thumbnail Text</label><textarea id="f_thumbText" placeholder="Bold text on thumbnail…"></textarea></div>
+        </div>
+        <div class="field"><label>Description</label><textarea id="f_desc" placeholder="YouTube description…"></textarea></div>
+        <div class="field-row">
+          <div class="field"><label>Keywords (comma separated)</label><input id="f_keywords" placeholder="free fire, ranked, tips"></div>
+          <div class="field"><label>Hashtags</label><input id="f_hashtags" placeholder="#FreeFire #RNGFF"></div>
+        </div>
+        <div class="field"><label>Related Links</label><textarea id="f_links" placeholder="Reference links, one per line…"></textarea></div>
+        <div class="field"><label>Important Notes</label><textarea id="f_notes" placeholder="Anything else to remember…"></textarea></div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: Video Ideas ==================== -->
+    <section class="page hidden" id="page-ideas">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="ideaSearch" placeholder="Search ideas…"></div>
+        <select id="ideaPriorityFilter"><option value="">All Priority</option><option>High</option><option>Medium</option><option>Low</option></select>
+        <select id="ideaStatusFilter"><option value="">All Status</option><option>New</option><option>Planned</option><option>In Progress</option><option>Used</option><option>Rejected</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="btnNewIdea"><i class="fa-solid fa-plus"></i> New Idea</button>
+      </div>
+      <div class="card-grid" id="ideaGrid"></div>
+    </section>
+
+    <!-- ==================== PAGE: Notes ==================== -->
+    <section class="page hidden" id="page-notes">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="noteSearch" placeholder="Search notes…"></div>
+        <select id="noteTagFilter"><option value="">All Tags</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="btnNewNote"><i class="fa-solid fa-plus"></i> New Note</button>
+      </div>
+      <div class="card-grid" id="noteGrid"></div>
+    </section>
+
+    <!-- ==================== PAGE: Upload Planner ==================== -->
+    <section class="page hidden" id="page-planner">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="plannerSearch" placeholder="Search planner…"></div>
+        <select id="plannerStatusFilter"><option value="">All Status</option><option>Draft</option><option>Scheduled</option><option>Uploaded</option><option>Missed</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="btnNewPlan"><i class="fa-solid fa-plus"></i> New Plan Entry</button>
+      </div>
+      <div class="card-grid" id="plannerGrid"></div>
+    </section>
+
+    <!-- ==================== PAGE: Video History ==================== -->
+    <section class="page hidden" id="page-videos">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="videoSearch" placeholder="Search video history…"></div>
+        <div class="spacer"></div>
+        <div class="pill-toggle"><button class="active" id="videoTabActive">Active</button><button id="videoTabArchived">Archived</button></div>
+        <button class="btn btn-primary" id="btnNewVideo"><i class="fa-solid fa-plus"></i> Log Uploaded Video</button>
+      </div>
+      <div class="card-grid" id="videoGrid"></div>
+    </section>
+
+    <!-- ==================== PAGE: Competitor Tracker ==================== -->
+    <section class="page hidden" id="page-competitors">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input id="compSearch" placeholder="Search competitors…"></div>
+        <select id="compPlatformFilter"><option value="">All Platforms</option><option>YouTube</option><option>Facebook</option><option>TikTok</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="btnNewComp"><i class="fa-solid fa-plus"></i> Add Competitor</button>
+      </div>
+      <div class="card-grid" id="compGrid"></div>
+    </section>
+
+    <!-- ==================== PAGE: Content Calendar ==================== -->
+    <section class="page hidden" id="page-calendar">
+      <div class="hud-panel">
+        <div class="cal-head">
+          <div class="cal-nav">
+            <button class="btn btn-icon" id="calPrev"><i class="fa-solid fa-chevron-left"></i></button>
+            <h3 id="calMonthLabel">Month Year</h3>
+            <button class="btn btn-icon" id="calNext"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+          <button class="btn btn-sm" id="calToday">Today</button>
+        </div>
+        <div class="cal-legend">
+          <span><i class="dot" style="background:var(--text-mid)"></i> Draft</span>
+          <span><i class="dot" style="background:#B99BFF"></i> Scheduled</span>
+          <span><i class="dot" style="background:var(--success)"></i> Uploaded</span>
+          <span><i class="dot" style="background:var(--danger)"></i> Missed</span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </section>
+
+    <!-- ==================== PAGE: Settings ==================== -->
+    <section class="page hidden" id="page-settings">
+      <div class="dash-grid">
+        <div class="hud-panel">
+          <div class="section-head"><h3><i class="fa-solid fa-sliders"></i> Upload Routine Targets</h3></div>
+          <div class="field-row">
+            <div class="field"><label>Long Videos / Week</label><input type="number" min="0" id="setLongTarget" value="3"></div>
+            <div class="field"><label>Shorts / Week</label><input type="number" min="0" id="setShortTarget" value="4"></div>
+          </div>
+          <button class="btn btn-primary" id="btnSaveSettings"><i class="fa-solid fa-floppy-disk"></i> Save Targets</button>
+        </div>
+        <div class="hud-panel">
+          <div class="section-head"><h3><i class="fa-solid fa-database"></i> Data & Backup</h3></div>
+          <p style="color:var(--text-mid);font-size:12.5px;margin-bottom:14px;">Export every collection as a single JSON backup file, downloaded to your device.</p>
+          <button class="btn" id="btnExportData"><i class="fa-solid fa-download"></i> Export Full Backup (JSON)</button>
+        </div>
+      </div>
+      <div style="height:16px"></div>
+      <div class="hud-panel">
+        <div class="section-head"><h3><i class="fa-solid fa-circle-info"></i> About This System</h3></div>
+        <p style="color:var(--text-mid);font-size:12.5px;line-height:1.7;">
+          RNG FF Command Center — a private, single-file management system for the RNG FF Free Fire gaming YouTube channel.
+          Built with vanilla HTML, CSS and JavaScript, backed live by Google Firebase Firestore. No login required — this
+          deployment is intended for personal use only on a link known solely to the channel owner.
+        </p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ==================== Generic Modal (Ideas / Notes / Planner / Video / Competitor forms) ==================== -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box" id="modalBox">
+    <div class="modal-head">
+      <h3 id="modalTitle">Title</h3>
+      <button class="btn btn-icon" id="modalClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <span class="label-mono" id="modalHint">Fill the fields and save</span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn" id="modalCancel">Cancel</button>
+        <button class="btn btn-primary" id="modalSave"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Confirm Dialog ==================== -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box confirm-box">
+    <div class="confirm-body">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <p id="confirmMsg">Are you sure?</p>
+    </div>
+    <div class="confirm-foot">
+      <button class="btn" id="confirmNo">Cancel</button>
+      <button class="btn btn-danger" id="confirmYes">Yes, Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Day Detail Modal (Calendar) ==================== -->
+<div class="modal-overlay" id="dayModal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="dayModalTitle">Day</h3><button class="btn btn-icon" id="dayModalClose"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body"><div class="mini-list" id="dayModalList"></div></div>
+  </div>
+</div>
+
+<div id="toastHost"></div>
+
+<script>
+/* =========================================================================
+   RNG FF COMMAND CENTER — APPLICATION SCRIPT
+   Sections:
+   1. Firebase init & config
+   2. Global state
+   3. Utility helpers (toast, confirm, date, debounce, id)
+   4. Firestore CRUD helpers + real-time listeners
+   5. Navigation / page switching
+   6. Dashboard rendering
+   7. Script Manager (list + full editor with autosave)
+   8. Video Ideas module
+   9. Notes module
+   10. Upload Planner module
+   11. Video History module
+   12. Competitor Tracker module
+   13. Content Calendar module
+   14. Settings module
+   15. Global Search
+   16. Init / bootstrap
+   ========================================================================= */
+
+/* ---------------- 1. Firebase init ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyDBl6nulJ4R4yPqD5_0xXhqUHgPcFDQZck",
+  authDomain: "rng-ff-c9eeb.firebaseapp.com",
+  projectId: "rng-ff-c9eeb",
+  storageBucket: "rng-ff-c9eeb.firebasestorage.app",
+  messagingSenderId: "74128379171",
+  appId: "1:74128379171:web:ef39e136ca5e832a385096"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+
+/* ---------------- 2. Global state ---------------- */
+const state = {
+  scripts: [], ideas: [], notes: [], planner: [], videos: [], competitors: [],
+  settings: { longTarget: 3, shortTarget: 4 },
+  currentPage: 'dashboard',
+  currentScriptId: null,   // id being edited in the script editor, null = new
+  scriptTrashMode: false,
+  videoArchiveMode: false,
+  listenersReady: 0
+};
+const TOTAL_LISTENERS = 6; // scripts, ideas, notes, planner, videos, competitors
+
+/* ---------------- 3. Utility helpers ---------------- */
+function uid(){ return 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function showToast(msg, type='default'){
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = msg;
+  host.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateX(20px)'; setTimeout(()=>el.remove(),250); }, 3200);
+}
+
+function debounce(fn, wait){
+  let t;
+  return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), wait); };
+}
+
+function fmtDate(ts){
+  if(!ts) return '—';
+  let d;
+  if(ts.toDate) d = ts.toDate();
+  else d = new Date(ts);
+  if(isNaN(d)) return '—';
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+}
+function fmtDateTime(ts){
+  if(!ts) return '—';
+  let d = ts.toDate ? ts.toDate() : new Date(ts);
+  if(isNaN(d)) return '—';
+  return d.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function todayISO(){ return isoDate(new Date()); }
+function startOfWeek(d){ const nd=new Date(d); const day=(nd.getDay()+6)%7; nd.setDate(nd.getDate()-day); nd.setHours(0,0,0,0); return nd; }
+function escapeHTML(str){ if(str===undefined||str===null) return ''; return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* Confirm dialog (Promise based) */
+function confirmDialog(message){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('confirmModal');
+    document.getElementById('confirmMsg').textContent = message;
+    modal.classList.add('open');
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    function cleanup(result){
+      modal.classList.remove('open');
+      yes.removeEventListener('click', onYes);
+      no.removeEventListener('click', onNo);
+      resolve(result);
+    }
+    function onYes(){ cleanup(true); }
+    function onNo(){ cleanup(false); }
+    yes.addEventListener('click', onYes);
+    no.addEventListener('click', onNo);
+  });
+}
+
+/* ---------------- 4. Firestore CRUD + listeners ---------------- */
+async function fsAdd(col, data){
+  try{
+    data.createdAt = FieldValue.serverTimestamp();
+    data.updatedAt = FieldValue.serverTimestamp();
+    const ref = await db.collection(col).add(data);
+    return ref.id;
+  }catch(e){ console.error(e); showToast('Failed to save: '+e.message, 'error'); throw e; }
+}
+async function fsUpdate(col, id, data){
+  try{
+    data.updatedAt = FieldValue.serverTimestamp();
+    await db.collection(col).doc(id).update(data);
+  }catch(e){ console.error(e); showToast('Failed to update: '+e.message, 'error'); throw e; }
+}
+async function fsDelete(col, id){
+  try{ await db.collection(col).doc(id).delete(); }
+  catch(e){ console.error(e); showToast('Failed to delete: '+e.message, 'error'); throw e; }
+}
+
+function attachListener(col, arrKey){
+  db.collection(col).orderBy('updatedAt','desc').onSnapshot(
+    snap=>{
+      state[arrKey] = snap.docs.map(d=>({id:d.id, ...d.data()}));
+      onDataChanged(arrKey);
+    },
+    err=>{
+      console.error(col, err);
+      showToast('Realtime sync error on '+col+': '+err.message, 'error');
+    }
+  );
+}
+
+function onDataChanged(arrKey){
+  // Always refresh dashboard stats since any collection can affect it
+  renderDashboard();
+  // Refresh the currently visible page's list
+  const map = {
+    scripts:'scripts', ideas:'ideas', notes:'notes',
+    planner:'planner', videos:'videos', competitors:'competitors'
+  };
+  if(state.currentPage === map[arrKey]) renderCurrentPage();
+  if(state.currentPage === 'calendar' && arrKey==='planner') renderCalendar();
+  hideLoaderWhenReady();
+}
+
+let loaderHidden = false;
+function hideLoaderWhenReady(){
+  state.listenersReady++;
+  if(state.listenersReady >= TOTAL_LISTENERS && !loaderHidden){
+    loaderHidden = true;
+    document.getElementById('loaderOverlay').style.display='none';
+  }
+}
+
+/* ---------------- 5. Navigation ---------------- */
+function switchPage(page){
+  state.currentPage = page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.add('hidden'));
+  const target = document.getElementById('page-'+page);
+  if(target) target.classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===page));
+
+  const titles = {
+    dashboard:['Dashboard','Overview of RNG FF channel operations'],
+    scripts:['Script Manager','Write, plan and track every video script'],
+    ideas:['Video Ideas','Capture and organize future content ideas'],
+    notes:['Notes','Research, updates, and everything worth remembering'],
+    planner:['Upload Planner','Schedule uploads and reminders'],
+    videos:['Video History','Full lifetime record of uploaded videos'],
+    competitors:['Competitor Tracker','Keep an eye on other Free Fire creators'],
+    calendar:['Content Calendar','Monthly view of your upload pipeline'],
+    settings:['Settings','App preferences and data backup']
+  };
+  document.getElementById('pageTitle').innerHTML = titles[page][0] + '<small id="pageSub">'+titles[page][1]+'</small>';
+
+  renderCurrentPage();
+  document.getElementById('sidebar').classList.remove('open');
+}
+function renderCurrentPage(){
+  const fns = {
+    dashboard: renderDashboard, scripts: renderScripts, ideas: renderIdeas,
+    notes: renderNotes, planner: renderPlanner, videos: renderVideos,
+    competitors: renderCompetitors, calendar: renderCalendar, settings: renderSettingsPage
+  };
+  if(fns[state.currentPage]) fns[state.currentPage]();
+}
+
+/* ---------------- 6. Dashboard ---------------- */
+function renderDashboard(){
+  const activeScripts = state.scripts.filter(s=>!s.deleted);
+  const draftVideos = activeScripts.filter(s=>s.status==='Draft').length;
+  const scheduledVideos = activeScripts.filter(s=>s.status==='Scheduled').length;
+  const uploadedVideos = state.videos.filter(v=>!v.archived).length + state.videos.filter(v=>v.archived).length;
+  const pendingUploads = state.planner.filter(p=>p.status!=='Uploaded').length;
+
+  const stats = [
+    {label:'Total Videos', val: state.videos.length, icon:'fa-film', accent:'var(--flame)', dim:'var(--flame-dim)'},
+    {label:'Draft Videos', val: draftVideos, icon:'fa-pen', accent:'var(--text-mid)', dim:'rgba(152,162,184,.14)'},
+    {label:'Scheduled Videos', val: scheduledVideos, icon:'fa-clock', accent:'#B99BFF', dim:'rgba(185,155,255,.14)'},
+    {label:'Uploaded Videos', val: uploadedVideos, icon:'fa-circle-check', accent:'var(--success)', dim:'rgba(46,204,113,.14)'},
+    {label:'Total Scripts', val: activeScripts.length, icon:'fa-file-lines', accent:'var(--info)', dim:'rgba(59,158,255,.14)'},
+    {label:'Total Notes', val: state.notes.length, icon:'fa-note-sticky', accent:'var(--gold)', dim:'rgba(255,197,66,.14)'},
+    {label:'Total Video Ideas', val: state.ideas.length, icon:'fa-lightbulb', accent:'var(--cyan)', dim:'rgba(63,224,208,.14)'},
+    {label:'Total Competitors', val: state.competitors.length, icon:'fa-crosshairs', accent:'var(--danger)', dim:'rgba(255,71,87,.14)'},
+    {label:'Pending Uploads', val: pendingUploads, icon:'fa-hourglass-half', accent:'var(--flame)', dim:'var(--flame-dim)'}
+  ];
+  document.getElementById('statGrid').innerHTML = stats.map(s=>`
+    <div class="hud-panel stat-card" style="--accent:${s.accent};--accent-dim:${s.dim}">
+      <div class="stat-top"><div class="stat-ico"><i class="fa-solid ${s.icon}"></i></div></div>
+      <div class="stat-num">${s.val}</div>
+      <div class="stat-name">${s.label}</div>
+    </div>`).join('');
+
+  // Weekly routine progress (based on planner entries marked Uploaded within current week)
+  const sow = startOfWeek(new Date());
+  const weekItems = state.planner.filter(p=>{
+    if(!p.date) return false;
+    const d = new Date(p.date);
+    return d >= sow && p.status==='Uploaded';
+  });
+  const longDone = weekItems.filter(p=>p.type==='Long').length;
+  const shortDone = weekItems.filter(p=>p.type==='Short').length;
+  const lt = state.settings.longTarget || 3, st = state.settings.shortTarget || 4;
+  document.getElementById('rLongDone').textContent = longDone;
+  document.getElementById('rLongTarget').textContent = lt;
+  document.getElementById('rShortDone').textContent = shortDone;
+  document.getElementById('rShortTarget').textContent = st;
+  document.getElementById('rLongBar').style.width = Math.min(100,(longDone/lt)*100)+'%';
+  document.getElementById('rShortBar').style.width = Math.min(100,(shortDone/st)*100)+'%';
+  document.getElementById('sfLong').textContent = lt;
+  document.getElementById('sfShort').textContent = st;
+
+  // Upcoming uploads (next 5 by date, not uploaded)
+  const upcoming = state.planner.filter(p=>p.status!=='Uploaded').sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)).slice(0,5);
+  document.getElementById('upcomingList').innerHTML = upcoming.length ? upcoming.map(p=>`
+    <div class="mini-row"><div><div class="mr-title">${escapeHTML(p.title||'Untitled')}</div><div class="mr-meta">${p.type||''} • ${p.date||'No date'}</div></div><span class="tag status-${p.status}">${p.status}</span></div>
+  `).join('') : emptyMini('No upcoming uploads planned');
+
+  // Recent scripts
+  const recentScripts = activeScripts.slice(0,5);
+  document.getElementById('recentScripts').innerHTML = recentScripts.length ? recentScripts.map(s=>`
+    <div class="mini-row"><div><div class="mr-title">${escapeHTML(s.title||'Untitled Script')}</div><div class="mr-meta">${fmtDateTime(s.updatedAt)}</div></div><span class="tag status-${s.status}">${s.status||'Draft'}</span></div>
+  `).join('') : emptyMini('No scripts yet');
+
+  // Recent ideas
+  const recentIdeas = state.ideas.slice(0,5);
+  document.getElementById('recentIdeas').innerHTML = recentIdeas.length ? recentIdeas.map(i=>`
+    <div class="mini-row"><div><div class="mr-title">${escapeHTML(i.title||'Untitled Idea')}</div><div class="mr-meta">${i.category||''}</div></div><span class="tag">${i.priority||'—'}</span></div>
+  `).join('') : emptyMini('No ideas captured yet');
+}
+function emptyMini(msg){ return `<div class="mini-row" style="justify-content:center;color:var(--text-dim);font-size:12px;">${msg}</div>`; }
+
+/* ---------------- 7. Script Manager ---------------- */
+function renderScripts(){
+  const q = (document.getElementById('scriptSearch').value||'').toLowerCase();
+  const statusF = document.getElementById('scriptStatusFilter').value;
+  const typeF = document.getElementById('scriptTypeFilter').value;
+  const sortV = document.getElementById('scriptSort').value;
+
+  let list = state.scripts.filter(s => !!s.deleted === state.scriptTrashMode);
+  if(q) list = list.filter(s => (s.title||'').toLowerCase().includes(q) || (s.script||'').toLowerCase().includes(q) || (s.keywords||'').toLowerCase().includes(q));
+  if(statusF) list = list.filter(s=>s.status===statusF);
+  if(typeF) list = list.filter(s=>s.videoType===typeF);
+
+  if(sortV==='updated_desc') list.sort((a,b)=> tsVal(b.updatedAt)-tsVal(a.updatedAt));
+  else if(sortV==='created_desc') list.sort((a,b)=> tsVal(b.createdAt)-tsVal(a.createdAt));
+  else if(sortV==='title_asc') list.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+  else if(sortV==='publish_asc') list.sort((a,b)=> new Date(a.publishDate||'2100-01-01') - new Date(b.publishDate||'2100-01-01'));
+
+  const grid = document.getElementById('scriptGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-file-pen', state.scriptTrashMode?'Trash is empty':'No scripts found', 'Create your first script to get started.'); return; }
+
+  grid.innerHTML = list.map(s=>`
+    <div class="hud-panel item-card" data-id="${s.id}">
+      <div class="ic-top">
+        <div class="ic-title">${escapeHTML(s.title||'Untitled Script')}</div>
+        <i class="fa-star ic-fav ${s.favorite?'active fa-solid':'fa-regular'}" data-fav="${s.id}"></i>
+      </div>
+      <div class="ic-desc">${escapeHTML((s.description||s.script||'No description yet.')).slice(0,140)}</div>
+      <div class="ic-tags">
+        <span class="tag status-${s.status||'Draft'}">${s.status||'Draft'}</span>
+        <span class="tag">${s.videoType||'—'}</span>
+        ${s.category?`<span class="tag">${escapeHTML(s.category)}</span>`:''}
+        ${s.publishDate?`<span class="tag"><i class="fa-regular fa-calendar"></i> ${s.publishDate}</span>`:''}
+      </div>
+      <div class="ic-foot">
+        <span class="label-mono">${fmtDateTime(s.updatedAt)}</span>
+        <div class="ic-actions">
+          ${state.scriptTrashMode ? `
+            <button class="btn btn-sm" data-restore="${s.id}"><i class="fa-solid fa-rotate-left"></i></button>
+            <button class="btn btn-sm btn-danger" data-perm-del="${s.id}"><i class="fa-solid fa-trash"></i></button>
+          ` : `
+            <button class="btn btn-sm" data-edit="${s.id}"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" data-soft-del="${s.id}"><i class="fa-solid fa-trash"></i></button>
+          `}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click', ()=>openScriptEditor(b.dataset.edit)));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click', (e)=>{ if(e.target.closest('button')||e.target.closest('.ic-fav')) return; if(!state.scriptTrashMode) openScriptEditor(c.dataset.id); }));
+  grid.querySelectorAll('[data-fav]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); toggleScriptFavorite(b.dataset.fav); }));
+  grid.querySelectorAll('[data-soft-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Move this script to Trash?')) fsUpdate('scripts', b.dataset.softDel, {deleted:true}); }));
+  grid.querySelectorAll('[data-restore]').forEach(b=>b.addEventListener('click', (e)=>{ e.stopPropagation(); fsUpdate('scripts', b.dataset.restore, {deleted:false}); showToast('Script restored','success'); }));
+  grid.querySelectorAll('[data-perm-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Permanently delete this script? This cannot be undone.')){ await fsDelete('scripts', b.dataset.permDel); showToast('Script permanently deleted','success'); } }));
+}
+function tsVal(ts){ if(!ts) return 0; return ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime(); }
+function toggleScriptFavorite(id){
+  const s = state.scripts.find(x=>x.id===id);
+  fsUpdate('scripts', id, {favorite: !(s&&s.favorite)});
+}
+
+/* Script editor: autosave logic */
+let autosaveTimer = null;
+const scriptFieldIds = ['f_title','f_type','f_status','f_category','f_series','f_publishDate','f_script','f_thumbIdea','f_thumbText','f_desc','f_keywords','f_hashtags','f_links','f_notes'];
+const scriptFieldMap = { f_title:'title', f_type:'videoType', f_status:'status', f_category:'category', f_series:'seriesName', f_publishDate:'publishDate', f_script:'script', f_thumbIdea:'thumbnailIdea', f_thumbText:'thumbnailText', f_desc:'description', f_keywords:'keywords', f_hashtags:'hashtags', f_links:'relatedLinks', f_notes:'importantNotes' };
+
+function openScriptEditor(id){
+  state.currentScriptId = id || null;
+  const s = id ? state.scripts.find(x=>x.id===id) : null;
+  document.getElementById('editorHeading').textContent = s ? (s.title || 'Edit Script') : 'New Script';
+  scriptFieldIds.forEach(fid=>{
+    const key = scriptFieldMap[fid];
+    document.getElementById(fid).value = s ? (s[key]||'') : (fid==='f_type'?'Long':fid==='f_status'?'Draft':'');
+  });
+  const favBtn = document.getElementById('btnFavToggle');
+  favBtn.innerHTML = (s&&s.favorite) ? '<i class="fa-solid fa-star"></i> Favorited' : '<i class="fa-regular fa-star"></i> Favorite';
+  favBtn.dataset.fav = s&&s.favorite ? '1':'0';
+  setSaveIndicator('idle');
+  document.getElementById('scriptEditor').classList.add('open');
+}
+function closeScriptEditor(){
+  document.getElementById('scriptEditor').classList.remove('open');
+  state.currentScriptId = null;
+}
+function setSaveIndicator(status){
+  const el = document.getElementById('saveIndicator');
+  el.className = 'save-indicator ' + status;
+  const label = status==='saving' ? 'Saving…' : status==='saved' ? 'Saved' : 'Idle';
+  el.innerHTML = '<i class="fa-solid fa-circle"></i> <span>'+label+'</span>';
+}
+const doAutosave = debounce(async ()=>{
+  const data = {};
+  scriptFieldIds.forEach(fid=>{ data[scriptFieldMap[fid]] = document.getElementById(fid).value; });
+  // don't autosave a completely empty new script
+  if(!state.currentScriptId && !data.title && !data.script) return;
+  setSaveIndicator('saving');
+  try{
+    if(state.currentScriptId){
+      await fsUpdate('scripts', state.currentScriptId, data);
+    } else {
+      data.deleted = false;
+      data.favorite = false;
+      const newId = await fsAdd('scripts', data);
+      state.currentScriptId = newId;
+    }
+    setSaveIndicator('saved');
+  }catch(e){ setSaveIndicator('idle'); }
+}, 1200);
+
+/* ---------------- 8. Video Ideas ---------------- */
+function renderIdeas(){
+  const q = (document.getElementById('ideaSearch').value||'').toLowerCase();
+  const prF = document.getElementById('ideaPriorityFilter').value;
+  const stF = document.getElementById('ideaStatusFilter').value;
+  let list = state.ideas.slice();
+  if(q) list = list.filter(i=>(i.title||'').toLowerCase().includes(q)||(i.notes||'').toLowerCase().includes(q));
+  if(prF) list = list.filter(i=>i.priority===prF);
+  if(stF) list = list.filter(i=>i.status===stF);
+
+  const grid = document.getElementById('ideaGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-lightbulb','No video ideas yet','Capture your next great Free Fire video idea.'); return; }
+  grid.innerHTML = list.map(i=>`
+    <div class="hud-panel item-card" data-id="${i.id}" style="--accent:var(--cyan)">
+      <div class="ic-top"><div class="ic-title">${escapeHTML(i.title||'Untitled Idea')}</div></div>
+      <div class="ic-desc">${escapeHTML(i.inspiration||i.notes||'No notes yet.')}</div>
+      <div class="ic-tags">
+        ${i.category?`<span class="tag">${escapeHTML(i.category)}</span>`:''}
+        ${i.contentType?`<span class="tag">${escapeHTML(i.contentType)}</span>`:''}
+        ${i.priority?`<span class="tag">${i.priority} Priority</span>`:''}
+        ${i.status?`<span class="tag">${i.status}</span>`:''}
+      </div>
+      <div class="ic-foot">
+        <span class="label-mono">${fmtDate(i.createdDate||i.createdAt)}</span>
+        <div class="ic-actions">
+          ${i.sourceLink?`<a class="btn btn-sm" href="${escapeHTML(i.sourceLink)}" target="_blank" onclick="event.stopPropagation()"><i class="fa-solid fa-up-right-from-square"></i></a>`:''}
+          <button class="btn btn-sm" data-edit="${i.id}"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-sm btn-danger" data-del="${i.id}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openIdeaModal(b.dataset.edit);}));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click',(e)=>{ if(e.target.closest('button')||e.target.closest('a')) return; openIdeaModal(c.dataset.id);}));
+  grid.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Delete this idea permanently?')){ await fsDelete('ideas', b.dataset.del); showToast('Idea deleted','success'); }}));
+}
+function openIdeaModal(id){
+  const item = id ? state.ideas.find(x=>x.id===id) : {};
+  openGenericModal({
+    title: id ? 'Edit Video Idea' : 'New Video Idea',
+    bodyHTML: `
+      <div class="field"><label>Title</label><input id="m_title" value="${attr(item.title)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Category</label><input id="m_category" value="${attr(item.category)}"></div>
+        <div class="field"><label>Content Type</label><input id="m_contentType" value="${attr(item.contentType)}" placeholder="Long / Short / Live"></div>
+      </div>
+      <div class="field"><label>Inspiration</label><textarea id="m_inspiration">${escapeHTML(item.inspiration)}</textarea></div>
+      <div class="field"><label>Source Link</label><input id="m_sourceLink" value="${attr(item.sourceLink)}"></div>
+      <div class="field"><label>Notes</label><textarea id="m_notes">${escapeHTML(item.notes)}</textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Priority</label><select id="m_priority">${opts(['High','Medium','Low'], item.priority)}</select></div>
+        <div class="field"><label>Status</label><select id="m_status">${opts(['New','Planned','In Progress','Used','Rejected'], item.status)}</select></div>
+      </div>
+    `,
+    onSave: async ()=>{
+      const data = {
+        title: val('m_title'), category: val('m_category'), contentType: val('m_contentType'),
+        inspiration: val('m_inspiration'), sourceLink: val('m_sourceLink'), notes: val('m_notes'),
+        priority: val('m_priority'), status: val('m_status'), createdDate: item.createdDate || todayISO()
+      };
+      if(id) await fsUpdate('ideas', id, data); else await fsAdd('ideas', data);
+      showToast('Idea saved','success');
+    }
+  });
+}
+
+/* ---------------- 9. Notes ---------------- */
+function renderNotes(){
+  const q = (document.getElementById('noteSearch').value||'').toLowerCase();
+  const tagF = document.getElementById('noteTagFilter').value;
+  let list = state.notes.slice();
+  if(q) list = list.filter(n=>(n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q));
+  if(tagF) list = list.filter(n=>n.tag===tagF);
+
+  // populate tag filter options
+  const tags = [...new Set(state.notes.map(n=>n.tag).filter(Boolean))];
+  const sel = document.getElementById('noteTagFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Tags</option>' + tags.map(t=>`<option ${t===cur?'selected':''}>${escapeHTML(t)}</option>`).join('');
+
+  const grid = document.getElementById('noteGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-note-sticky','No notes yet','Save research, tournament info, or gameplay tips here.'); return; }
+  grid.innerHTML = list.map(n=>`
+    <div class="hud-panel item-card" data-id="${n.id}" style="--accent:var(--gold)">
+      <div class="ic-top"><div class="ic-title">${escapeHTML(n.title||'Untitled Note')}</div></div>
+      <div class="ic-desc">${escapeHTML(n.content||'')}</div>
+      <div class="ic-tags">${n.tag?`<span class="tag">${escapeHTML(n.tag)}</span>`:''}</div>
+      <div class="ic-foot">
+        <span class="label-mono">${fmtDateTime(n.updatedAt)}</span>
+        <div class="ic-actions">
+          <button class="btn btn-sm" data-edit="${n.id}"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-sm btn-danger" data-del="${n.id}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openNoteModal(b.dataset.edit);}));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click',(e)=>{ if(e.target.closest('button')) return; openNoteModal(c.dataset.id);}));
+  grid.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Delete this note permanently?')){ await fsDelete('notes', b.dataset.del); showToast('Note deleted','success'); }}));
+}
+function openNoteModal(id){
+  const item = id ? state.notes.find(x=>x.id===id) : {};
+  openGenericModal({
+    title: id ? 'Edit Note' : 'New Note',
+    bodyHTML: `
+      <div class="field"><label>Title</label><input id="m_title" value="${attr(item.title)}"></div>
+      <div class="field"><label>Tag / Category</label><input id="m_tag" value="${attr(item.tag)}" placeholder="e.g. Tournament, Feature Update, Gameplay Tip"></div>
+      <div class="field"><label>Content</label><textarea id="m_content" style="min-height:180px">${escapeHTML(item.content)}</textarea></div>
+    `,
+    onSave: async ()=>{
+      const data = { title: val('m_title'), tag: val('m_tag'), content: val('m_content') };
+      if(id) await fsUpdate('notes', id, data); else await fsAdd('notes', data);
+      showToast('Note saved','success');
+    }
+  });
+}
+
+/* ---------------- 10. Upload Planner ---------------- */
+function renderPlanner(){
+  const q = (document.getElementById('plannerSearch').value||'').toLowerCase();
+  const stF = document.getElementById('plannerStatusFilter').value;
+  let list = state.planner.slice();
+  if(q) list = list.filter(p=>(p.title||'').toLowerCase().includes(q));
+  if(stF) list = list.filter(p=>p.status===stF);
+  list.sort((a,b)=> new Date(a.date||0) - new Date(b.date||0));
+
+  const grid = document.getElementById('plannerGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-calendar-check','No plan entries yet','Schedule your next Free Fire upload.'); return; }
+  grid.innerHTML = list.map(p=>`
+    <div class="hud-panel item-card" data-id="${p.id}" style="--accent:#B99BFF">
+      <div class="ic-top"><div class="ic-title">${escapeHTML(p.title||'Untitled')}</div></div>
+      <div class="ic-desc">Reminder: ${escapeHTML(p.reminder||'—')}</div>
+      <div class="ic-tags">
+        <span class="tag">${p.type||'—'}</span>
+        <span class="tag status-${p.status}">${p.status||'Draft'}</span>
+        <span class="tag">${p.priority||'—'} Priority</span>
+        ${p.date?`<span class="tag"><i class="fa-regular fa-calendar"></i> ${p.date} ${p.time||''}</span>`:''}
+      </div>
+      <div class="ic-foot">
+        <span class="label-mono">Publish: ${p.publishDate||'—'}</span>
+        <div class="ic-actions">
+          <button class="btn btn-sm" data-edit="${p.id}"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-sm btn-danger" data-del="${p.id}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openPlannerModal(b.dataset.edit);}));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click',(e)=>{ if(e.target.closest('button')) return; openPlannerModal(c.dataset.id);}));
+  grid.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Delete this plan entry?')){ await fsDelete('planner', b.dataset.del); showToast('Entry deleted','success'); }}));
+}
+function openPlannerModal(id){
+  const item = id ? state.planner.find(x=>x.id===id) : {};
+  openGenericModal({
+    title: id ? 'Edit Plan Entry' : 'New Plan Entry',
+    bodyHTML: `
+      <div class="field"><label>Video Title</label><input id="m_title" value="${attr(item.title)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Type</label><select id="m_type">${opts(['Long','Short'], item.type)}</select></div>
+        <div class="field"><label>Priority</label><select id="m_priority">${opts(['High','Medium','Low'], item.priority)}</select></div>
+      </div>
+      <div class="field-row-3">
+        <div class="field"><label>Upload Date</label><input type="date" id="m_date" value="${attr(item.date)}"></div>
+        <div class="field"><label>Time</label><input type="time" id="m_time" value="${attr(item.time)}"></div>
+        <div class="field"><label>Publish Date</label><input type="date" id="m_publishDate" value="${attr(item.publishDate)}"></div>
+      </div>
+      <div class="field"><label>Reminder</label><input id="m_reminder" value="${attr(item.reminder)}" placeholder="e.g. Render thumbnail 1 day before"></div>
+      <div class="field"><label>Status</label><select id="m_status">${opts(['Draft','Scheduled','Uploaded','Missed'], item.status)}</select></div>
+    `,
+    onSave: async ()=>{
+      const data = {
+        title: val('m_title'), type: val('m_type'), priority: val('m_priority'),
+        date: val('m_date'), time: val('m_time'), publishDate: val('m_publishDate'),
+        reminder: val('m_reminder'), status: val('m_status')
+      };
+      if(id) await fsUpdate('planner', id, data); else await fsAdd('planner', data);
+      showToast('Plan entry saved','success');
+    }
+  });
+}
+
+/* ---------------- 11. Video History ---------------- */
+function renderVideos(){
+  const q = (document.getElementById('videoSearch').value||'').toLowerCase();
+  let list = state.videos.filter(v => !!v.archived === state.videoArchiveMode);
+  if(q) list = list.filter(v=>(v.title||'').toLowerCase().includes(q)||(v.tags||'').toLowerCase().includes(q));
+
+  const grid = document.getElementById('videoGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-clock-rotate-left', state.videoArchiveMode?'No archived videos':'No uploaded videos logged yet','Log a video after it goes live to keep a lifetime record.'); return; }
+  grid.innerHTML = list.map(v=>`
+    <div class="hud-panel item-card" data-id="${v.id}" style="--accent:var(--success)">
+      <div class="ic-top"><div class="ic-title">${escapeHTML(v.title||'Untitled Video')}</div></div>
+      <div class="ic-desc">${escapeHTML(v.description||'No description.')}</div>
+      <div class="ic-tags">
+        ${v.uploadDate?`<span class="tag"><i class="fa-regular fa-calendar"></i> ${v.uploadDate}</span>`:''}
+        ${v.tags?`<span class="tag">${escapeHTML(v.tags).split(',')[0]}</span>`:''}
+      </div>
+      <div class="ic-foot">
+        <span class="label-mono">${fmtDateTime(v.updatedAt)}</span>
+        <div class="ic-actions">
+          ${v.videoUrl?`<a class="btn btn-sm" href="${escapeHTML(v.videoUrl)}" target="_blank" onclick="event.stopPropagation()"><i class="fa-solid fa-play"></i></a>`:''}
+          <button class="btn btn-sm" data-edit="${v.id}"><i class="fa-solid fa-pen"></i></button>
+          ${state.videoArchiveMode ?
+            `<button class="btn btn-sm" data-unarchive="${v.id}"><i class="fa-solid fa-box-open"></i></button>` :
+            `<button class="btn btn-sm btn-danger" data-archive="${v.id}"><i class="fa-solid fa-box-archive"></i></button>`}
+        </div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openVideoModal(b.dataset.edit);}));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click',(e)=>{ if(e.target.closest('button')||e.target.closest('a')) return; openVideoModal(c.dataset.id);}));
+  grid.querySelectorAll('[data-archive]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Archive this video? It stays in history permanently — nothing is ever deleted.')){ await fsUpdate('videos', b.dataset.archive, {archived:true}); showToast('Video archived','success'); }}));
+  grid.querySelectorAll('[data-unarchive]').forEach(b=>b.addEventListener('click', (e)=>{ e.stopPropagation(); fsUpdate('videos', b.dataset.unarchive, {archived:false}); showToast('Video restored to active history','success'); }));
+}
+function openVideoModal(id){
+  const item = id ? state.videos.find(x=>x.id===id) : {};
+  const history = (item.editHistory||[]);
+  openGenericModal({
+    title: id ? 'Edit Video Record' : 'Log Uploaded Video',
+    bodyHTML: `
+      <div class="field"><label>Title</label><input id="m_title" value="${attr(item.title)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Thumbnail URL</label><input id="m_thumbnail" value="${attr(item.thumbnail)}"></div>
+        <div class="field"><label>Video URL</label><input id="m_videoUrl" value="${attr(item.videoUrl)}"></div>
+      </div>
+      <div class="field"><label>Script (or reference)</label><textarea id="m_script">${escapeHTML(item.script)}</textarea></div>
+      <div class="field"><label>Description</label><textarea id="m_description">${escapeHTML(item.description)}</textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Keywords</label><input id="m_keywords" value="${attr(item.keywords)}"></div>
+        <div class="field"><label>Tags</label><input id="m_tags" value="${attr(item.tags)}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Hashtags</label><input id="m_hashtags" value="${attr(item.hashtags)}"></div>
+        <div class="field"><label>Upload Date</label><input type="date" id="m_uploadDate" value="${attr(item.uploadDate)}"></div>
+      </div>
+      <div class="field"><label>Add Edit History Note</label><input id="m_historyNote" placeholder="e.g. Updated title for SEO on ${todayISO()}"></div>
+      <div class="field"><label>Edit History Log</label>
+        <div style="max-height:120px;overflow-y:auto;background:var(--bg-void);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--font-mono);font-size:11px;color:var(--text-mid)">
+          ${history.length ? history.map(h=>`<div style="margin-bottom:4px;">• ${escapeHTML(h)}</div>`).join('') : 'No history yet.'}
+        </div>
+      </div>
+    `,
+    onSave: async ()=>{
+      const note = val('m_historyNote');
+      const newHistory = note ? [...history, todayISO()+': '+note] : history;
+      const data = {
+        title: val('m_title'), thumbnail: val('m_thumbnail'), videoUrl: val('m_videoUrl'),
+        script: val('m_script'), description: val('m_description'), keywords: val('m_keywords'),
+        tags: val('m_tags'), hashtags: val('m_hashtags'), uploadDate: val('m_uploadDate'),
+        editHistory: newHistory
+      };
+      if(id) await fsUpdate('videos', id, data); else { data.archived=false; await fsAdd('videos', data); }
+      showToast('Video record saved','success');
+    }
+  });
+}
+
+/* ---------------- 12. Competitor Tracker ---------------- */
+function renderCompetitors(){
+  const q = (document.getElementById('compSearch').value||'').toLowerCase();
+  const pf = document.getElementById('compPlatformFilter').value;
+  let list = state.competitors.slice();
+  if(q) list = list.filter(c=>(c.channelName||'').toLowerCase().includes(q));
+  if(pf) list = list.filter(c=>c.platform===pf);
+
+  const grid = document.getElementById('compGrid');
+  if(!list.length){ grid.innerHTML = emptyState('fa-crosshairs','No competitors tracked yet','Add other Free Fire creators to keep tabs on the competition.'); return; }
+  grid.innerHTML = list.map(c=>`
+    <div class="hud-panel item-card" data-id="${c.id}" style="--accent:var(--danger)">
+      <div class="ic-top"><div class="ic-title">${escapeHTML(c.channelName||'Unnamed Channel')}</div></div>
+      <div class="ic-desc">${escapeHTML(c.contentStyle||'No notes on content style.')}</div>
+      <div class="ic-tags">
+        <span class="tag">${c.platform||'—'}</span>
+        ${c.uploadFrequency?`<span class="tag">${escapeHTML(c.uploadFrequency)}</span>`:''}
+      </div>
+      <div class="ic-foot">
+        <span class="label-mono">Checked: ${c.lastCheckedDate||'—'}</span>
+        <div class="ic-actions">
+          ${c.channelLink?`<a class="btn btn-sm" href="${escapeHTML(c.channelLink)}" target="_blank" onclick="event.stopPropagation()"><i class="fa-solid fa-up-right-from-square"></i> Open</a>`:''}
+          <button class="btn btn-sm" data-edit="${c.id}"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-sm btn-danger" data-del="${c.id}"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openCompModal(b.dataset.edit);}));
+  grid.querySelectorAll('.item-card').forEach(c=>c.addEventListener('click',(e)=>{ if(e.target.closest('button')||e.target.closest('a')) return; openCompModal(c.dataset.id);}));
+  grid.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', async (e)=>{ e.stopPropagation(); if(await confirmDialog('Remove this competitor?')){ await fsDelete('competitors', b.dataset.del); showToast('Competitor removed','success'); }}));
+}
+function openCompModal(id){
+  const item = id ? state.competitors.find(x=>x.id===id) : {};
+  openGenericModal({
+    title: id ? 'Edit Competitor' : 'Add Competitor',
+    bodyHTML: `
+      <div class="field"><label>Channel Name</label><input id="m_channelName" value="${attr(item.channelName)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Platform</label><select id="m_platform">${opts(['YouTube','Facebook','TikTok'], item.platform)}</select></div>
+        <div class="field"><label>Last Checked Date</label><input type="date" id="m_lastCheckedDate" value="${attr(item.lastCheckedDate||todayISO())}"></div>
+      </div>
+      <div class="field"><label>Channel Link</label><input id="m_channelLink" value="${attr(item.channelLink)}"></div>
+      <div class="field"><label>Content Style</label><textarea id="m_contentStyle">${escapeHTML(item.contentStyle)}</textarea></div>
+      <div class="field"><label>Upload Frequency</label><input id="m_uploadFrequency" value="${attr(item.uploadFrequency)}" placeholder="e.g. Daily, 3x/week"></div>
+      <div class="field"><label>Notes</label><textarea id="m_notes">${escapeHTML(item.notes)}</textarea></div>
+    `,
+    onSave: async ()=>{
+      const data = {
+        channelName: val('m_channelName'), platform: val('m_platform'), channelLink: val('m_channelLink'),
+        contentStyle: val('m_contentStyle'), uploadFrequency: val('m_uploadFrequency'),
+        lastCheckedDate: val('m_lastCheckedDate'), notes: val('m_notes')
+      };
+      if(id) await fsUpdate('competitors', id, data); else await fsAdd('competitors', data);
+      showToast('Competitor saved','success');
+    }
+  });
+}
+
+/* ---------------- 13. Content Calendar ---------------- */
+let calCursor = new Date();
+function renderCalendar(){
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  document.getElementById('calMonthLabel').textContent = calCursor.toLocaleDateString('en-GB',{month:'long', year:'numeric'});
+
+  const firstDay = new Date(y,m,1);
+  const startOffset = (firstDay.getDay()+6)%7; // Monday-first
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const daysInPrevMonth = new Date(y,m,0).getDate();
+
+  const statusColor = { Draft:'var(--text-mid)', Scheduled:'#B99BFF', Uploaded:'var(--success)', Missed:'var(--danger)' };
+
+  // Map date -> planner items (use publishDate first, fallback date)
+  const byDate = {};
+  state.planner.forEach(p=>{
+    const d = p.publishDate || p.date;
+    if(!d) return;
+    (byDate[d] = byDate[d]||[]).push(p);
+  });
+
+  let cellsHTML = '';
+  const dow = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  dow.forEach(d=> cellsHTML += ''); // placeholder, dow rendered separately below
+
+  let html = dow.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  // previous month tail
+  for(let i=startOffset-1;i>=0;i--){
+    const num = daysInPrevMonth - i;
+    html += `<div class="cal-cell other-month"><div class="cd-num">${num}</div></div>`;
+  }
+  const todayStr = todayISO();
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const items = byDate[dateStr] || [];
+    const isToday = dateStr === todayStr;
+    const dots = items.slice(0,6).map(p=>`<span class="dot" style="background:${statusColor[p.status]||'var(--text-mid)'}" title="${escapeHTML(p.title||'')}"></span>`).join('');
+    html += `<div class="cal-cell ${isToday?'today':''}" data-date="${dateStr}"><div class="cd-num">${d}</div><div class="cd-dots">${dots}</div></div>`;
+  }
+  // next month head to fill grid (up to total 42 cells)
+  const totalCells = startOffset + daysInMonth;
+  const remaining = (7 - (totalCells % 7)) % 7;
+  for(let i=1;i<=remaining;i++){
+    html += `<div class="cal-cell other-month"><div class="cd-num">${i}</div></div>`;
+  }
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = html;
+  grid.querySelectorAll('.cal-cell[data-date]').forEach(cell=>{
+    cell.addEventListener('click', ()=> openDayModal(cell.dataset.date, byDate[cell.dataset.date]||[]));
+  });
+}
+function openDayModal(dateStr, items){
+  document.getElementById('dayModalTitle').textContent = new Date(dateStr).toLocaleDateString('en-GB',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+  const list = document.getElementById('dayModalList');
+  list.innerHTML = items.length ? items.map(p=>`
+    <div class="mini-row"><div><div class="mr-title">${escapeHTML(p.title||'Untitled')}</div><div class="mr-meta">${p.type||''} • ${p.time||''}</div></div><span class="tag status-${p.status}">${p.status}</span></div>
+  `).join('') : emptyMini('Nothing planned for this day');
+  document.getElementById('dayModal').classList.add('open');
+}
+
+/* ---------------- 14. Settings ---------------- */
+function renderSettingsPage(){
+  document.getElementById('setLongTarget').value = state.settings.longTarget ?? 3;
+  document.getElementById('setShortTarget').value = state.settings.shortTarget ?? 4;
+}
+async function saveSettings(){
+  const longTarget = parseInt(document.getElementById('setLongTarget').value)||0;
+  const shortTarget = parseInt(document.getElementById('setShortTarget').value)||0;
+  state.settings.longTarget = longTarget;
+  state.settings.shortTarget = shortTarget;
+  await db.collection('settings').doc('general').set({longTarget, shortTarget, updatedAt: FieldValue.serverTimestamp()}, {merge:true});
+  showToast('Settings saved','success');
+  renderDashboard();
+}
+async function loadSettings(){
+  try{
+    const doc = await db.collection('settings').doc('general').get();
+    if(doc.exists){
+      const d = doc.data();
+      state.settings.longTarget = d.longTarget ?? 3;
+      state.settings.shortTarget = d.shortTarget ?? 4;
+      renderDashboard();
+      if(state.currentPage==='settings') renderSettingsPage();
+    }
+  }catch(e){ console.error(e); }
+}
+async function exportBackup(){
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    scripts: state.scripts, ideas: state.ideas, notes: state.notes,
+    planner: state.planner, videos: state.videos, competitors: state.competitors,
+    settings: state.settings
+  };
+  const blob = new Blob([JSON.stringify(backup,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `rngff-backup-${todayISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded','success');
+}
+
+/* ---------------- 15. Global Search ---------------- */
+function runGlobalSearch(q){
+  const box = document.getElementById('searchResults');
+  q = q.trim().toLowerCase();
+  if(!q){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const results = [];
+  state.scripts.filter(s=>!s.deleted).forEach(s=>{ if((s.title||'').toLowerCase().includes(q)||(s.script||'').toLowerCase().includes(q)) results.push({type:'Script', icon:'fa-file-pen', title:s.title||'Untitled Script', go:()=>{switchPage('scripts'); setTimeout(()=>openScriptEditor(s.id),50);}}); });
+  state.ideas.forEach(i=>{ if((i.title||'').toLowerCase().includes(q)) results.push({type:'Idea', icon:'fa-lightbulb', title:i.title||'Untitled Idea', go:()=>{switchPage('ideas'); setTimeout(()=>openIdeaModal(i.id),50);}}); });
+  state.notes.forEach(n=>{ if((n.title||'').toLowerCase().includes(q)||(n.content||'').toLowerCase().includes(q)) results.push({type:'Note', icon:'fa-note-sticky', title:n.title||'Untitled Note', go:()=>{switchPage('notes'); setTimeout(()=>openNoteModal(n.id),50);}}); });
+  state.planner.forEach(p=>{ if((p.title||'').toLowerCase().includes(q)) results.push({type:'Plan', icon:'fa-calendar-check', title:p.title||'Untitled', go:()=>{switchPage('planner'); setTimeout(()=>openPlannerModal(p.id),50);}}); });
+  state.videos.forEach(v=>{ if((v.title||'').toLowerCase().includes(q)) results.push({type:'Video', icon:'fa-clock-rotate-left', title:v.title||'Untitled Video', go:()=>{switchPage('videos'); setTimeout(()=>openVideoModal(v.id),50);}}); });
+  state.competitors.forEach(c=>{ if((c.channelName||'').toLowerCase().includes(q)) results.push({type:'Competitor', icon:'fa-crosshairs', title:c.channelName||'Unnamed', go:()=>{switchPage('competitors'); setTimeout(()=>openCompModal(c.id),50);}}); });
+
+  if(!results.length){ box.innerHTML = `<div class="sr-item" style="cursor:default;color:var(--text-dim)">No matches found</div>`; box.classList.remove('hidden'); return; }
+  box.innerHTML = results.slice(0,20).map((r,idx)=>`
+    <div class="sr-item" data-idx="${idx}"><div class="sr-title">${escapeHTML(r.title)}</div><div class="sr-meta">${r.type}</div></div>
+  `).join('');
+  box.classList.remove('hidden');
+  box.querySelectorAll('.sr-item[data-idx]').forEach(el=>{
+    el.addEventListener('click', ()=>{ results[+el.dataset.idx].go(); box.classList.add('hidden'); document.getElementById('globalSearch').value=''; });
+  });
+}
+
+/* ---------------- Generic Modal helper ---------------- */
+let modalOnSave = null;
+function openGenericModal({title, bodyHTML, onSave, wide=false}){
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = bodyHTML;
+  document.getElementById('modalBox').classList.toggle('wide', wide);
+  modalOnSave = onSave;
+  document.getElementById('modal').classList.add('open');
+}
+function closeGenericModal(){ document.getElementById('modal').classList.remove('open'); modalOnSave = null; }
+function val(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function attr(v){ return escapeHTML(v||''); }
+function opts(arr, selected){ return arr.map(o=>`<option ${o===selected?'selected':''}>${o}</option>`).join(''); }
+function emptyState(icon,title,desc){ return `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid ${icon}"></i><h4>${title}</h4><p>${desc}</p></div>`; }
+
+/* ---------------- 16. Init / bootstrap ---------------- */
+function initClock(){
+  function tick(){ document.getElementById('clockBox').textContent = new Date().toLocaleString('en-GB',{weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}); }
+  tick(); setInterval(tick, 30000);
+}
+
+function bindEvents(){
+  // Sidebar nav
+  document.querySelectorAll('.nav-item').forEach(item=>{
+    item.addEventListener('click', ()=> switchPage(item.dataset.page));
+  });
+  document.getElementById('menuBtn').addEventListener('click', ()=> document.getElementById('sidebar').classList.toggle('open'));
+
+  // Global search
+  const gs = document.getElementById('globalSearch');
+  gs.addEventListener('input', debounce(()=>runGlobalSearch(gs.value), 200));
+  document.addEventListener('click', (e)=>{ if(!e.target.closest('.search-wrap')) document.getElementById('searchResults').classList.add('hidden'); });
+
+  // Script manager filters
+  ['scriptSearch','scriptStatusFilter','scriptTypeFilter','scriptSort'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderScripts);
+    document.getElementById(id).addEventListener('change', renderScripts);
+  });
+  document.getElementById('btnNewScript').addEventListener('click', ()=> openScriptEditor(null));
+  document.getElementById('btnCloseEditor').addEventListener('click', closeScriptEditor);
+  document.getElementById('scriptTabActive').addEventListener('click', ()=>{ state.scriptTrashMode=false; document.getElementById('scriptTabActive').classList.add('active'); document.getElementById('scriptTabTrash').classList.remove('active'); renderScripts(); });
+  document.getElementById('scriptTabTrash').addEventListener('click', ()=>{ state.scriptTrashMode=true; document.getElementById('scriptTabTrash').classList.add('active'); document.getElementById('scriptTabActive').classList.remove('active'); renderScripts(); });
+  document.getElementById('btnFavToggle').addEventListener('click', ()=>{
+    if(!state.currentScriptId){ showToast('Save the script first (type a title) before favoriting'); return; }
+    const s = state.scripts.find(x=>x.id===state.currentScriptId);
+    fsUpdate('scripts', state.currentScriptId, {favorite: !(s&&s.favorite)});
+    const btn = document.getElementById('btnFavToggle');
+    const willBeFav = !(s&&s.favorite);
+    btn.innerHTML = willBeFav ? '<i class="fa-solid fa-star"></i> Favorited' : '<i class="fa-regular fa-star"></i> Favorite';
+  });
+  scriptFieldIds.forEach(fid=>{
+    document.getElementById(fid).addEventListener('input', ()=>{ setSaveIndicator('saving'); doAutosave(); });
+  });
+
+  // Ideas
+  ['ideaSearch','ideaPriorityFilter','ideaStatusFilter'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderIdeas);
+    document.getElementById(id).addEventListener('change', renderIdeas);
+  });
+  document.getElementById('btnNewIdea').addEventListener('click', ()=> openIdeaModal(null));
+
+  // Notes
+  ['noteSearch','noteTagFilter'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderNotes);
+    document.getElementById(id).addEventListener('change', renderNotes);
+  });
+  document.getElementById('btnNewNote').addEventListener('click', ()=> openNoteModal(null));
+
+  // Planner
+  ['plannerSearch','plannerStatusFilter'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderPlanner);
+    document.getElementById(id).addEventListener('change', renderPlanner);
+  });
+  document.getElementById('btnNewPlan').addEventListener('click', ()=> openPlannerModal(null));
+
+  // Videos
+  document.getElementById('videoSearch').addEventListener('input', renderVideos);
+  document.getElementById('btnNewVideo').addEventListener('click', ()=> openVideoModal(null));
+  document.getElementById('videoTabActive').addEventListener('click', ()=>{ state.videoArchiveMode=false; document.getElementById('videoTabActive').classList.add('active'); document.getElementById('videoTabArchived').classList.remove('active'); renderVideos(); });
+  document.getElementById('videoTabArchived').addEventListener('click', ()=>{ state.videoArchiveMode=true; document.getElementById('videoTabArchived').classList.add('active'); document.getElementById('videoTabActive').classList.remove('active'); renderVideos(); });
+
+  // Competitors
+  ['compSearch','compPlatformFilter'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', renderCompetitors);
+    document.getElementById(id).addEventListener('change', renderCompetitors);
+  });
+  document.getElementById('btnNewComp').addEventListener('click', ()=> openCompModal(null));
+
+  // Calendar
+  document.getElementById('calPrev').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); renderCalendar(); });
+  document.getElementById('calNext').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); renderCalendar(); });
+  document.getElementById('calToday').addEventListener('click', ()=>{ calCursor = new Date(); renderCalendar(); });
+  document.getElementById('dayModalClose').addEventListener('click', ()=> document.getElementById('dayModal').classList.remove('open'));
+  document.getElementById('dayModal').addEventListener('click', (e)=>{ if(e.target.id==='dayModal') e.currentTarget.classList.remove('open'); });
+
+  // Settings
+  document.getElementById('btnSaveSettings').addEventListener('click', saveSettings);
+  document.getElementById('btnExportData').addEventListener('click', exportBackup);
+
+  // Generic modal
+  document.getElementById('modalClose').addEventListener('click', closeGenericModal);
+  document.getElementById('modalCancel').addEventListener('click', closeGenericModal);
+  document.getElementById('modal').addEventListener('click', (e)=>{ if(e.target.id==='modal') closeGenericModal(); });
+  document.getElementById('modalSave').addEventListener('click', async ()=>{
+    if(modalOnSave){ await modalOnSave(); closeGenericModal(); }
+  });
+}
+
+function init(){
+  initClock();
+  bindEvents();
+  loadSettings();
+  attachListener('scripts','scripts');
+  attachListener('ideas','ideas');
+  attachListener('notes','notes');
+  attachListener('planner','planner');
+  attachListener('videos','videos');
+  attachListener('competitors','competitors');
+  renderCalendar();
+  // Safety: hide loader after 6s even if some listener is slow/offline
+  setTimeout(()=>{ if(!loaderHidden){ loaderHidden=true; document.getElementById('loaderOverlay').style.display='none'; } }, 6000);
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
